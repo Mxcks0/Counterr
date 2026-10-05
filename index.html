@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Workout Zähler</title>
+<style>
+:root{
+  --bg:#f6f6f4; --card:#ffffff; --text:#18181b; --muted:#8b8b92; --line:#ececea; --soft:#f1f1ee;
+  --c1:#4f7cff; --c2:#ff7a45; --c3:#1fae78; --down:#e5484d;
+  --r:18px;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#111113; --card:#19191c; --text:#f2f2f3; --muted:#85858d; --line:#26262a; --soft:#222226; }
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{
+  position:fixed;inset:0;background:var(--bg);color:var(--text);
+  font:15px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-text-size-adjust:100%;
+  --accent:var(--c1);
+  --tint:color-mix(in srgb,var(--accent) 13%,transparent);
+  --bar:color-mix(in srgb,var(--accent) 32%,var(--card));
+}
+body[data-ex="pullups"]{--accent:var(--c1)}
+body[data-ex="pushups"]{--accent:var(--c2)}
+body[data-ex="squats"]{--accent:var(--c3)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touch-action:manipulation}
+button:disabled{opacity:.35;cursor:default}
+input{font:inherit;touch-action:manipulation}
+.num{font-variant-numeric:tabular-nums}
+
+.app{
+  height:100%;max-width:1120px;margin:0 auto;display:grid;gap:12px;
+  padding:calc(env(safe-area-inset-top) + 14px) calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 14px) calc(env(safe-area-inset-left) + 16px);
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:auto auto auto minmax(0,1fr) auto;
+  grid-template-areas:"top" "tabs" "counter" "chart" "stats";
+}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+
+/* Kopfzeile */
+.top{grid-area:top;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.date{text-align:left}
+.date .main{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.date .sub{font-size:13px;color:var(--muted);margin-top:1px}
+.nav{display:flex;gap:6px}
+.icon{width:36px;height:36px;border-radius:12px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;font-size:18px;color:var(--muted)}
+.icon svg{width:18px;height:18px}
+
+/* Übungs-Tabs */
+.tabs{grid-area:tabs;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tab{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;text-align:left;transition:border-color .15s,background .15s}
+.tab[data-ex="pullups"]{--tc:var(--c1)}
+.tab[data-ex="pushups"]{--tc:var(--c2)}
+.tab[data-ex="squats"]{--tc:var(--c3)}
+.tab .tn{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab .tn::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tc);flex:none}
+.tab .tv{font-size:20px;font-weight:650;margin-top:2px}
+.tab.on{border-color:var(--tc);background:color-mix(in srgb,var(--tc) 8%,var(--card))}
+
+/* Zähler */
+.counter{grid-area:counter;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:16px}
+.total{text-align:center}
+.big{font-size:clamp(40px,8vh,104px);font-weight:750;letter-spacing:-.045em;line-height:1;color:var(--text)}
+.big.bump{animation:bump .28s ease}
+@keyframes bump{40%{transform:scale(1.08);color:var(--accent)}}
+.lbl{font-size:13px;color:var(--muted);margin-top:4px}
+.sets{display:flex;justify-content:center;gap:6px;height:28px;overflow:hidden;flex-wrap:nowrap}
+.chip{flex:none;padding:0 11px;height:28px;line-height:28px;border-radius:99px;background:var(--tint);color:var(--accent);font-size:13px;font-weight:600}
+.chip.more{background:var(--soft);color:var(--muted)}
+.chip.armed{background:var(--accent);color:#fff}
+.empty-hint{font-size:13px;color:var(--muted);line-height:28px}
+.stepper{display:grid;grid-template-columns:58px 1fr 58px;height:clamp(48px,7vh,60px);background:var(--soft);border-radius:14px;align-items:center}
+.stepper button{height:100%;font-size:26px;color:var(--muted)}
+.stepper .val{display:flex;align-items:baseline;justify-content:center;gap:6px}
+.stepper input{width:3.2ch;text-align:center;background:transparent;border:0;outline:none;color:var(--text);font-size:26px;font-weight:650;-webkit-user-select:text;user-select:text}
+.stepper .unit{font-size:12.5px;color:var(--muted)}
+.actions{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+.actions button{height:clamp(46px,6.5vh,56px);border-radius:14px;font-weight:600}
+.ghost{background:var(--soft);color:var(--muted)}
+.primary{background:var(--accent);color:#fff}
+.primary:active{filter:brightness(.93)}
+
+/* Verlauf */
+.chartcard{grid-area:chart;display:flex;flex-direction:column;min-height:0;padding:14px 16px 10px}
+.chead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ctitle{font-size:14px;font-weight:650}
+.csub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.seg{display:flex;background:var(--soft);border-radius:10px;padding:3px;flex:none}
+.seg button{font-size:12.5px;padding:5px 10px;border-radius:8px;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chart{flex:1;min-height:56px;position:relative;margin-top:14px}
+.plot{position:absolute;inset:0;display:flex;align-items:flex-end;gap:var(--gap,8px)}
+.col{flex:1;height:100%;position:relative;display:flex;align-items:flex-end;cursor:pointer;min-width:0}
+.fill{width:100%;border-radius:6px 6px 3px 3px;background:var(--bar);transition:height .25s ease}
+.col.zero .fill{background:var(--line);height:3px!important}
+.col.sel .fill{background:var(--accent)}
+.thin .fill{border-radius:2px 2px 1px 1px}
+.v{position:absolute;left:50%;transform:translateX(-50%);font-size:11px;color:var(--muted);white-space:nowrap;pointer-events:none}
+.col.sel .v{color:var(--accent);font-weight:650}
+.avg{position:absolute;left:0;right:0;border-top:1.5px dashed color-mix(in srgb,var(--accent) 55%,transparent);pointer-events:none;transition:bottom .25s ease}
+.avg span{position:absolute;left:0;top:-17px;font-size:10.5px;font-weight:600;color:var(--accent);background:var(--card);padding:0 4px;border-radius:4px}
+.xl{display:flex;gap:var(--gap,8px);height:16px;margin-top:6px}
+.xl div{flex:1;position:relative;min-width:0}
+.xl span{position:absolute;left:50%;transform:translateX(-50%);font-size:11px;color:var(--muted);white-space:nowrap}
+.xl .sel span{color:var(--accent);font-weight:650}
+
+/* Statistiken */
+.stats{grid-area:stats;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;min-width:0}
+.tile .tv{font-size:19px;font-weight:650;white-space:nowrap}
+.tile .tl{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.up{color:var(--c3)} .down{color:var(--down)}
+
+/* Menü */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.28);display:grid;place-items:center;padding:20px;z-index:10}
+.modal[hidden]{display:none}
+.sheet{width:100%;max-width:340px;background:var(--card);border-radius:20px;padding:18px;display:grid;gap:8px}
+.sheet h2{font-size:16px;font-weight:650;margin-bottom:4px}
+.sheet button{height:46px;border-radius:12px;background:var(--soft);font-weight:550;text-align:left;padding:0 14px}
+.sheet .danger{color:var(--down)}
+.sheet .close{text-align:center;background:var(--text);color:var(--card)}
+.sheet p{font-size:12px;color:var(--muted);line-height:1.4;margin-top:2px}
+
+/* Desktop */
+@media (min-width:860px), (min-width:560px) and (orientation:landscape){
+  .app{
+    gap:16px;padding:28px 32px;
+    grid-template-columns:minmax(340px,410px) minmax(0,1fr);
+    grid-template-rows:auto auto minmax(0,1fr) auto;
+    grid-template-areas:"top top" "tabs tabs" "counter chart" "counter stats";
+  }
+  .tab{padding:12px 16px}
+  .tab .tv{font-size:24px}
+  .counter{padding:28px;gap:18px}
+  .big{font-size:clamp(64px,12vh,128px)}
+  .chartcard{padding:18px 20px 12px}
+  .tile{padding:14px 16px}
+  .tile .tv{font-size:22px}
+  .icon:hover,.tab:hover,.ghost:hover{filter:brightness(.97)}
+}
+/* Niedrige Bildschirme (kleine Handys) */
+@media (orientation:portrait) and (max-width:859px) and (max-height:760px){
+  .app{gap:8px;padding-top:calc(env(safe-area-inset-top) + 10px);padding-bottom:calc(env(safe-area-inset-bottom) + 10px)}
+  .date .main{font-size:19px}
+  .tab{padding:8px 10px}.tab .tv{font-size:17px}
+  .counter{padding:12px;gap:8px}
+  .stepper{height:48px}.actions button{height:46px}
+  .sets,.chip{height:24px;line-height:24px}
+  .chartcard{padding:10px 12px 8px}.chart{margin-top:10px}
+  .tile{padding:7px 10px}.tile .tv{font-size:16px}
+}
+@media (orientation:portrait) and (max-width:859px) and (max-height:620px){ .sets{display:none} }
+/* Handy quer */
+@media (min-width:560px) and (orientation:landscape) and (max-height:620px){
+  .app{padding:10px calc(env(safe-area-inset-right) + 18px) 10px calc(env(safe-area-inset-left) + 18px);gap:8px;grid-template-columns:minmax(260px,340px) minmax(0,1fr)}
+  .date .main{font-size:18px}.date .sub{font-size:12px}
+  .chartcard{padding:10px 14px 6px}.chart{margin-top:8px;min-height:40px}
+  .stepper{height:44px}.actions button{height:44px}
+  .counter{padding:14px;gap:10px}
+  .big{font-size:clamp(40px,12vh,56px)}
+  .lbl{margin-top:2px}
+  .sets{display:none}
+  .tab{padding:7px 12px}.tab .tv{font-size:18px}
+  .tile{padding:6px 10px}.tile .tv{font-size:16px}.tile .tl{font-size:11px}
+}
+</style>
+</head>
+<body data-ex="pullups">
+<div class="app">
+  <header class="top">
+    <button class="date" id="dateBtn" title="Zu heute springen">
+      <div class="main" id="dateMain">Heute</div>
+      <div class="sub" id="dateSub"></div>
+    </button>
+    <div class="nav">
+      <button class="icon" id="prev" aria-label="Vorheriger Tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button class="icon" id="next" aria-label="Nächster Tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+      <button class="icon" id="menuBtn" aria-label="Menü"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab" data-ex="pullups"><div class="tn">Klimmzüge</div><div class="tv num">0</div></button>
+    <button class="tab" data-ex="pushups"><div class="tn">Liegestütze</div><div class="tv num">0</div></button>
+    <button class="tab" data-ex="squats"><div class="tn">Kniebeugen</div><div class="tv num">0</div></button>
+  </nav>
+
+  <section class="card counter">
+    <div class="total">
+      <div class="big num" id="big">0</div>
+      <div class="lbl" id="lbl">Wiederholungen</div>
+    </div>
+    <div class="sets" id="sets"></div>
+    <div class="stepper">
+      <button id="minus" aria-label="Weniger">−</button>
+      <div class="val"><input id="rep" class="num" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="10" aria-label="Wiederholungen pro Satz"><span class="unit">Wdh.</span></div>
+      <button id="plus" aria-label="Mehr">+</button>
+    </div>
+    <div class="actions">
+      <button class="ghost" id="undo">Rückgängig</button>
+      <button class="primary" id="add">Satz eintragen</button>
+    </div>
+  </section>
+
+  <section class="card chartcard">
+    <div class="chead">
+      <div><div class="ctitle">Verlauf</div><div class="csub" id="csub"></div></div>
+      <div class="seg" id="range">
+        <button data-r="7">7 T</button><button data-r="30">30 T</button><button data-r="90">90 T</button>
+      </div>
+    </div>
+    <div class="chart"><div class="plot" id="plot"></div><div class="avg" id="avg"><span id="avgL"></span></div></div>
+    <div class="xl" id="xl"></div>
+  </section>
+
+  <section class="stats">
+    <div class="tile"><div class="tv num" id="sAvg">0</div><div class="tl">Ø pro Tag</div></div>
+    <div class="tile"><div class="tv num" id="sTot">0</div><div class="tl" id="lTot">Gesamt</div></div>
+    <div class="tile"><div class="tv num" id="sTrend">–</div><div class="tl" id="lTrend">vs. vorher</div></div>
+    <div class="tile"><div class="tv num" id="sDays">0</div><div class="tl">Aktive Tage</div></div>
+    <div class="tile"><div class="tv num" id="sBest">0</div><div class="tl">Bester Satz</div></div>
+    <div class="tile"><div class="tv num" id="sStreak">0</div><div class="tl">Tage in Folge</div></div>
+  </section>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="sheet">
+    <h2>Daten</h2>
+    <button id="exp">Backup exportieren</button>
+    <button id="imp">Backup importieren</button>
+    <button id="reset" class="danger">Alle Daten löschen</button>
+    <button id="close" class="close">Schließen</button>
+    <p>Deine Daten werden lokal in diesem Browser gespeichert. Mit Export/Import kannst du sie zwischen Handy und PC übertragen.</p>
+  </div>
+</div>
+<input type="file" id="file" accept="application/json,.json" hidden>
+
+<script>
+(() => {
+  const EX = { pullups: 'Klimmzüge', pushups: 'Liegestütze', squats: 'Kniebeugen' };
+  const KEY = 'wt-data-v1', PKEY = 'wt-prefs-v1';
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, '0');
+  const keyOf = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const parse = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (k, n) => { const d = parse(k); d.setDate(d.getDate() + n); return keyOf(d); };
+  const todayKey = () => keyOf(new Date());
+  const nf = n => n.toLocaleString('de-DE');
+  const fmtAvg = v => v >= 100 ? nf(Math.round(v)) : nf(Math.round(v * 10) / 10);
+
+  const load = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+  let data = load(KEY) || {};
+  let prefs = Object.assign({ ex: 'pullups', range: 7, last: { pullups: 8, pushups: 20, squats: 20 } }, load(PKEY) || {});
+  if (!EX[prefs.ex]) prefs.ex = 'pullups';
+  if (![7, 30, 90].includes(prefs.range)) prefs.range = 7;
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(data)); localStorage.setItem(PKEY, JSON.stringify(prefs)); } catch (e) {} };
+
+  let today = todayKey();
+  let sel = today;
+  let armed = null, armTimer = null;
+
+  const setsOf = (k, ex) => (data[k] && data[k][ex]) || [];
+  const sumOf = (k, ex) => setsOf(k, ex).reduce((a, b) => a + b, 0);
+  const cleanup = k => {
+    if (!data[k]) return;
+    for (const ex in data[k]) if (!data[k][ex].length) delete data[k][ex];
+    if (!Object.keys(data[k]).length) delete data[k];
+  };
+
+  /* ---------- Rendern ---------- */
+  function render() {
+    const ex = prefs.ex;
+    document.body.dataset.ex = ex;
+
+    // Datum
+    const d = parse(sel);
+    const diff = Math.round((parse(today) - d) / 864e5);
+    $('dateMain').textContent = diff === 0 ? 'Heute' : diff === 1 ? 'Gestern' : d.toLocaleDateString('de-DE', { weekday: 'long' });
+    const opts = { weekday: 'short', day: 'numeric', month: 'long' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    $('dateSub').textContent = d.toLocaleDateString('de-DE', opts);
+    $('next').disabled = sel >= today;
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.toggle('on', t.dataset.ex === ex);
+      t.querySelector('.tv').textContent = nf(sumOf(sel, t.dataset.ex));
+    });
+
+    // Zähler
+    const s = setsOf(sel, ex);
+    $('big').textContent = nf(sumOf(sel, ex));
+    $('lbl').textContent = 'Wiederholungen · ' + s.length + (s.length === 1 ? ' Satz' : ' Sätze');
+    const box = $('sets');
+    if (!s.length) {
+      box.innerHTML = '<span class="empty-hint">Noch keine Sätze</span>';
+    } else {
+      const start = Math.max(0, s.length - 7);
+      let h = start > 0 ? '<span class="chip more">+' + start + '</span>' : '';
+      for (let i = start; i < s.length; i++) {
+        h += '<button class="chip' + (armed === i ? ' armed' : '') + '" data-i="' + i + '" title="Antippen zum Löschen">' + (armed === i ? '✕ ' : '') + s[i] + '</button>';
+      }
+      box.innerHTML = h;
+    }
+    if (document.activeElement !== $('rep')) $('rep').value = prefs.last[ex] || 10;
+    $('undo').disabled = !s.length;
+
+    // Zeitraum-Buttons
+    document.querySelectorAll('#range button').forEach(b => b.classList.toggle('on', +b.dataset.r === prefs.range));
+
+    renderChart(ex);
+  }
+
+  function renderChart(ex) {
+    const R = prefs.range;
+    const keys = [];
+    for (let i = R - 1; i >= 0; i--) keys.push(addDays(today, -i));
+    const vals = keys.map(k => sumOf(k, ex));
+    const total = vals.reduce((a, b) => a + b, 0);
+    const avg = total / R;
+    const max = Math.max(...vals);
+    const scale = Math.max(max, 1) * (R === 7 ? 1.2 : 1.08);
+
+    const gap = R === 7 ? '8px' : R === 30 ? '3px' : '1px';
+    const plot = $('plot'), xl = $('xl');
+    plot.style.setProperty('--gap', gap);
+    xl.style.setProperty('--gap', gap);
+    plot.classList.toggle('thin', R !== 7);
+
+    let ph = '', xh = '';
+    keys.forEach((k, i) => {
+      const v = vals[i], p = (v / scale * 100).toFixed(2);
+      const cls = 'col' + (v ? '' : ' zero') + (k === sel ? ' sel' : '');
+      const label = R === 7 && v ? '<span class="v num" style="bottom:calc(' + p + '% + 4px)">' + nf(v) + '</span>' : '';
+      ph += '<div class="' + cls + '" data-k="' + k + '" title="' + parse(k).toLocaleDateString('de-DE') + ': ' + nf(v) + '"><div class="fill" style="height:' + p + '%"></div>' + label + '</div>';
+
+      const back = R - 1 - i;
+      let lt = '';
+      if (R === 7) lt = parse(k).toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
+      else if ((R === 30 && back % 7 === 0) || (R === 90 && back % 15 === 0)) {
+        const dd = parse(k); lt = back === 0 ? 'Heute' : dd.getDate() + '.' + (dd.getMonth() + 1) + '.';
+      }
+      xh += '<div class="' + (k === sel ? 'sel' : '') + '"><span>' + lt + '</span></div>';
+    });
+    plot.innerHTML = ph;
+    xl.innerHTML = xh;
+
+    const a = $('avg');
+    a.style.display = avg > 0 ? '' : 'none';
+    a.style.bottom = (avg / scale * 100) + '%';
+    $('avgL').textContent = 'Ø ' + fmtAvg(avg);
+
+    $('csub').textContent = total ? 'Bester Tag: ' + nf(max) : 'Noch keine Einträge';
+
+    // Kennzahlen
+    let prev = 0;
+    for (let i = R; i < 2 * R; i++) prev += sumOf(addDays(today, -i), ex);
+    $('sAvg').textContent = fmtAvg(avg);
+    $('sTot').textContent = nf(total);
+    $('lTot').textContent = 'Gesamt (' + R + ' T)';
+    const tr = $('sTrend');
+    tr.className = 'tv num';
+    if (!prev && !total) tr.textContent = '–';
+    else if (!prev) { tr.textContent = 'neu'; tr.classList.add('up'); }
+    else {
+      const pct = Math.round((total - prev) / prev * 100);
+      tr.textContent = (pct > 0 ? '+' : pct < 0 ? '−' : '±') + Math.abs(pct) + ' %';
+      if (pct > 0) tr.classList.add('up'); else if (pct < 0) tr.classList.add('down');
+    }
+    $('lTrend').textContent = 'vs. vorige ' + R + ' T';
+    $('sDays').textContent = vals.filter(v => v > 0).length + '/' + R;
+
+    let best = 0;
+    for (const k in data) for (const v of (data[k][ex] || [])) if (v > best) best = v;
+    $('sBest').textContent = nf(best);
+
+    let streak = 0, k = today;
+    if (!sumOf(k, ex)) k = addDays(k, -1);
+    while (sumOf(k, ex) > 0) { streak++; k = addDays(k, -1); }
+    $('sStreak').textContent = nf(streak);
+  }
+
+  /* ---------- Aktionen ---------- */
+  const getRep = () => parseInt($('rep').value, 10) || 0;
+  function setRep(v) {
+    v = Math.max(1, Math.min(999, v | 0));
+    $('rep').value = v;
+    prefs.last[prefs.ex] = v;
+    save();
+  }
+  function bump() { const b = $('big'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
+  function disarm() { armed = null; clearTimeout(armTimer); }
+
+  function addSet() {
+    const v = getRep();
+    if (v < 1) { setRep(1); return; }
+    setRep(v);
+    const ex = prefs.ex;
+    data[sel] = data[sel] || {};
+    (data[sel][ex] = data[sel][ex] || []).push(v);
+    disarm(); save(); render(); bump();
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+  function undo() {
+    const s = setsOf(sel, prefs.ex);
+    if (!s.length) return;
+    s.pop(); cleanup(sel); disarm(); save(); render();
+  }
+  function removeSet(i) {
+    const s = setsOf(sel, prefs.ex);
+    s.splice(i, 1); cleanup(sel); disarm(); save(); render();
+  }
+  function setEx(ex) { prefs.ex = ex; disarm(); save(); render(); }
+  function goDay(k) { if (k > today) k = today; sel = k; disarm(); render(); }
+
+  $('add').addEventListener('click', addSet);
+  $('undo').addEventListener('click', undo);
+  $('tabs').addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) setEx(t.dataset.ex); });
+  $('range').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { prefs.range = +b.dataset.r; save(); render(); } });
+  $('plot').addEventListener('click', e => { const c = e.target.closest('.col'); if (c) goDay(c.dataset.k); });
+  $('prev').addEventListener('click', () => goDay(addDays(sel, -1)));
+  $('next').addEventListener('click', () => goDay(addDays(sel, 1)));
+  $('dateBtn').addEventListener('click', () => goDay(today));
+  $('sets').addEventListener('click', e => {
+    const c = e.target.closest('.chip[data-i]'); if (!c) return;
+    const i = +c.dataset.i;
+    if (armed === i) { removeSet(i); return; }
+    armed = i; clearTimeout(armTimer);
+    armTimer = setTimeout(() => { armed = null; render(); }, 2500);
+    render();
+  });
+
+  // +/− mit Gedrückthalten
+  function hold(btn, delta) {
+    let t1, t2;
+    const stop = () => { clearTimeout(t1); clearInterval(t2); };
+    btn.addEventListener('pointerdown', e => {
+      e.preventDefault(); $('rep').blur();
+      setRep(getRep() + delta);
+      t1 = setTimeout(() => { t2 = setInterval(() => setRep(getRep() + delta), 70); }, 380);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, stop));
+  }
+  hold($('minus'), -1);
+  hold($('plus'), 1);
+
+  const rep = $('rep');
+  rep.addEventListener('input', () => { rep.value = rep.value.replace(/\D/g, '').slice(0, 3); });
+  rep.addEventListener('change', () => setRep(getRep() || 1));
+  rep.addEventListener('focus', () => rep.select());
+
+  // Tastatur (PC)
+  document.addEventListener('keydown', e => {
+    if (!$('modal').hidden) { if (e.key === 'Escape') $('modal').hidden = true; return; }
+    const inInput = e.target === rep;
+    if (e.key === 'Enter') { e.preventDefault(); if (inInput) setRep(getRep() || 1); addSet(); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setRep(getRep() + 1); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setRep(getRep() - 1); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+    if (inInput) return;
+    if (e.key === '1') setEx('pullups');
+    else if (e.key === '2') setEx('pushups');
+    else if (e.key === '3') setEx('squats');
+    else if (e.key === '+') setRep(getRep() + 1);
+    else if (e.key === '-') setRep(getRep() - 1);
+    else if (e.key === 'ArrowLeft') goDay(addDays(sel, -1));
+    else if (e.key === 'ArrowRight') goDay(addDays(sel, 1));
+  });
+
+  // Menü: Export / Import / Reset
+  $('menuBtn').addEventListener('click', () => { $('modal').hidden = false; });
+  $('close').addEventListener('click', () => { $('modal').hidden = true; });
+  $('modal').addEventListener('click', e => { if (e.target.id === 'modal') $('modal').hidden = true; });
+  $('exp').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify({ app: 'workout-zaehler', version: 1, data, prefs }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'workout-backup-' + today + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  $('imp').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const j = JSON.parse(await f.text());
+      const d = j && j.data;
+      if (!d || typeof d !== 'object') throw 0;
+      if (!confirm('Backup importieren? Deine aktuellen Daten werden ersetzt.')) return;
+      data = d;
+      if (j.prefs && j.prefs.last) prefs.last = Object.assign(prefs.last, j.prefs.last);
+      save(); render(); $('modal').hidden = true;
+    } catch (err) { alert('Die Datei konnte nicht gelesen werden.'); }
+  });
+  $('reset').addEventListener('click', () => {
+    if (!confirm('Wirklich alle Trainingsdaten löschen?')) return;
+    data = {}; save(); render(); $('modal').hidden = true;
+  });
+
+  // Kein Zoomen, kein Scrollen
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('dblclick', e => e.preventDefault());
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  let lastTouch = 0;
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastTouch < 320 && e.target !== rep) e.preventDefault();
+    lastTouch = now;
+  }, { passive: false });
+  document.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+
+  // Tageswechsel (z. B. App über Nacht offen)
+  function checkDay() {
+    const t = todayKey();
+    if (t !== today) { if (sel === today) sel = t; today = t; render(); }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDay(); });
+  setInterval(checkDay, 60000);
+
+  render();
+})();
+</script>
+</body>
+</html>
